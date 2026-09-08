@@ -1,0 +1,263 @@
+# Program 1 — Hadoop WordCount
+
+## Step 1 — Verify Docker
+
+**Run on Windows PowerShell:**
+
+```powershell
+docker --version
+```
+
+## Step 2 — Create folders
+
+**Run on Windows PowerShell:**
+
+```powershell
+mkdir bda_labs
+mkdir bda_labs\program_1
+```
+
+## Step 3 — Create `WordCount.java`
+
+Create this file:
+
+```text
+C:\bda_labs\program_1\WordCount.java
+```
+
+Paste this entire program into it:
+
+```java
+import java.io.IOException;
+import java.util.StringTokenizer;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class WordCount {
+
+    public static class TokenizerMapper
+            extends Mapper<Object, Text, Text, IntWritable> {
+
+        private final static IntWritable one = new IntWritable(1);
+        private Text word = new Text();
+
+        public void map(Object key, Text value, Context context)
+                throws IOException, InterruptedException {
+
+            StringTokenizer itr = new StringTokenizer(value.toString());
+
+            while (itr.hasMoreTokens()) {
+                word.set(itr.nextToken());
+                context.write(word, one);
+            }
+        }
+    }
+
+    public static class IntSumReducer
+            extends Reducer<Text, IntWritable, Text, IntWritable> {
+
+        private IntWritable result = new IntWritable();
+
+        public void reduce(Text key, Iterable<IntWritable> values,
+                           Context context)
+                throws IOException, InterruptedException {
+
+            int sum = 0;
+
+            for (IntWritable val : values) {
+                sum += val.get();
+            }
+
+            result.set(sum);
+            context.write(key, result);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+
+        Configuration conf = new Configuration();
+
+        Job job = Job.getInstance(conf, "word count");
+
+        job.setJarByClass(WordCount.class);
+        job.setMapperClass(TokenizerMapper.class);
+        job.setCombinerClass(IntSumReducer.class);
+        job.setReducerClass(IntSumReducer.class);
+
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
+
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+}
+```
+
+## Step 4 — Start Hadoop container
+
+**Windows PowerShell:**
+
+```powershell
+docker run -dit --name hadoop apache/hadoop:3.3.6 bash
+```
+
+## Step 5 — Enter container as root
+
+**Windows PowerShell:**
+
+```powershell
+docker exec -u 0 -it hadoop bash
+```
+
+## Step 6 — Install Java
+
+**Inside the container:**
+
+```bash
+sed -i 's|^mirrorlist=|#mirrorlist=|g' /etc/yum.repos.d/CentOS-Base.repo
+```
+
+```bash
+sed -i 's|^#baseurl=http\://mirror.centos.org|baseurl=http\://vault.centos.org|g' /etc/yum.repos.d/CentOS-Base.repo
+```
+
+```bash
+yum clean all
+```
+
+```bash
+yum install -y java-1.8.0-openjdk-devel
+```
+
+## Step 7 — Verify Java
+
+**Inside the container:**
+
+```bash
+javac -version
+```
+
+Then:
+
+```bash
+exit
+```
+
+## Step 8 — Enter container normally
+
+**Windows PowerShell:**
+
+```powershell
+docker exec -it hadoop bash
+```
+
+## Step 9 — Verify Java again
+
+**Inside the container:**
+
+```bash
+javac -version
+```
+
+## Step 10 — Copy Java program
+
+**Exit the container first:**
+
+```bash
+exit
+```
+
+**Windows PowerShell:**
+
+```powershell
+docker cp C:\bda_labs\program_1\WordCount.java hadoop:/opt/hadoop/WordCount.java
+```
+
+## Step 11 — Enter container
+
+```powershell
+docker exec -it hadoop bash
+```
+
+## Step 12 — Create input files
+
+**Inside the container:**
+
+```bash
+mkdir -p input
+```
+
+```bash
+echo "the quick brown fox the lazy dog the fox" > input/file1.txt
+```
+
+```bash
+echo "a quick dog and a brown fox jumped" > input/file2.txt
+```
+
+## Step 13 — Set Hadoop classpath
+
+```bash
+export HADOOP_CLASSPATH=$(hadoop classpath)
+```
+
+## Step 14 — Create classes folder
+
+```bash
+mkdir -p classes
+```
+
+## Step 15 — Compile the Java program
+
+```bash
+javac -classpath $HADOOP_CLASSPATH -d classes WordCount.java
+```
+
+## Step 16 — Create JAR file
+
+```bash
+jar -cvf wordcount.jar -C classes .
+```
+
+## Step 17 — Run WordCount
+
+```bash
+hadoop jar wordcount.jar WordCount input output
+```
+
+## Step 18 — Display result
+
+```bash
+cat output/part-r-00000
+```
+
+
+## If you run the program again
+
+Delete the old output first:
+
+```bash
+rm -r output
+```
+
+Then run:
+
+```bash
+hadoop jar wordcount.jar WordCount input output
+```
+
+And:
+
+```bash
+cat output/part-r-00000
+```
